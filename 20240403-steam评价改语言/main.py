@@ -21,23 +21,35 @@ headers = {
     "Content-Type": "application/json-patch+json"
 }
 
+target_appId = "2744150"
+
 
 def fetch_data(line):
-    print(line)
-    bot_name = line.split()[0]
-    url = line.split()[1]
-    cdkey = line.split()[2]
-
-    logger.error(f'{bot_name} {url} {cdkey}')
+    bot_name = line.split("\t")[0]
+    url = line.split("\t")[1]
     try:
-        response = requests.post(f'{url}/Api/Command', headers=headers, json={
-            "Command": f"REDEEMWALLET {bot_name} {cdkey}"
+        response1 = requests.post(f'{url}/Api/SIH/{bot_name}/RecommendedId', headers=headers, json={
+            "AppId": target_appId,
+            "ReviewUrl": ""
         })
-        logging.info(response.text)
-        # 将结果写入到 txt 文件中
-        with open('./data/output.txt', 'w', encoding='utf8') as f:
-            f.write(f"{response.json()['Result']}\n")
-        return
+        logging.info(f'获取评测ID：{response1.text}')
+        if not response1 or response1.text is None or response1.text == '':
+            return
+        res_data = response1.json()
+        review_id = res_data['Result'][bot_name]['Result']
+
+        response2 = requests.post(f'{url}/Api/SIH/{bot_name}/ViewPage', headers=headers, json={
+            "Url": "https://steamcommunity.com/userreviews/update/" + review_id,
+            "Referer": "https://steamcommunity.com",
+            "BodyDatas": {
+                "language": "english"
+            },
+            "Post": True,
+            "Response": True,
+            "GuestNum": 0
+        })
+        logging.info(f'评测修改语言：{response2.text}')
+        return response2.json()['Result']
     except Exception as e:
         logger.error(f'{url} 请求失败：{e}')
         return None
@@ -58,3 +70,9 @@ with open("./data/input.txt", "r") as file:
             result = future.result()
             if result:
                 data_array.append(result)
+
+# 将结果写入到 txt 文件中
+with open('./data/output.txt', 'w', encoding='utf8') as f:
+    for results in data_array:
+        for key, value in results.items():
+            f.write(f"{key}: {value}\n")
